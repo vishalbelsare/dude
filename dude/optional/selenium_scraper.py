@@ -1,7 +1,6 @@
 import asyncio
 import itertools
 import logging
-import os
 from typing import Any, AsyncIterable, Callable, Iterable, Optional, Sequence, Tuple, Union
 from urllib.parse import urljoin
 
@@ -16,11 +15,12 @@ from selenium.webdriver.remote.webelement import WebElement
 from seleniumwire.request import Request
 from seleniumwire.webdriver import Chrome, Firefox
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 from webdriver_manager.firefox import GeckoDriverManager
-from webdriver_manager.utils import ChromeType
 
 from ..base import ScraperAbstract
 from ..rule import Selector, SelectorType, rule_grouper, rule_sorter
+from .utils import get_chromedriver_latest_release
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class SeleniumScraper(ScraperAbstract):
             **kwargs,
         )
 
-    def setup(self, driver: WebDriver = None) -> None:
+    def setup(self, driver: Optional[WebDriver] = None) -> None:
         """
         Executes setup handlers
 
@@ -89,7 +89,7 @@ class SeleniumScraper(ScraperAbstract):
 
         self.event_post_setup(driver)
 
-    async def setup_async(self, driver: WebDriver = None) -> None:
+    async def setup_async(self, driver: Optional[WebDriver] = None) -> None:
         """
         Executes setup handlers
 
@@ -108,7 +108,7 @@ class SeleniumScraper(ScraperAbstract):
 
         await self.event_post_setup_async(driver)
 
-    def navigate(self, driver: WebDriver = None) -> bool:
+    def navigate(self, driver: Optional[WebDriver] = None) -> bool:
         """
         Executes navigate handlers
 
@@ -122,7 +122,7 @@ class SeleniumScraper(ScraperAbstract):
                 return True
         return False
 
-    async def navigate_async(self, driver: WebDriver = None) -> bool:
+    async def navigate_async(self, driver: Optional[WebDriver] = None) -> bool:
         """
         Executes navigate handlers
 
@@ -244,17 +244,19 @@ class SeleniumScraper(ScraperAbstract):
         if browser_type == "firefox":
             executable_path = GeckoDriverManager().install()
             firefox_options = FirefoxOptions()
-            firefox_options.headless = headless
+            if headless:
+                firefox_options.add_argument("--headless")
             firefox_options.set_preference("dom.webnotifications.enabled", False)
             firefox_options.set_preference("network.captive-portal-service.enabled", False)
             driver = Firefox(service=FirefoxService(executable_path=executable_path), options=firefox_options)
         else:
             chrome_options = ChromeOptions()
-            chrome_options.headless = headless
+            if headless:
+                chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-notifications")
             executable_path = ChromeDriverManager(
-                chrome_type=ChromeType.CHROMIUM, version=os.getenv("CHROMEDRIVER_VERSION", "latest")
+                chrome_type=ChromeType.GOOGLE, latest_release_url=get_chromedriver_latest_release()
             ).install()
             driver = Chrome(service=ChromeService(executable_path=executable_path), options=chrome_options)
 
@@ -262,7 +264,9 @@ class SeleniumScraper(ScraperAbstract):
 
         return driver
 
-    def collect_elements(self, driver: WebDriver = None) -> Iterable[Tuple[str, int, int, int, Any, Callable]]:
+    def collect_elements(
+        self, driver: Optional[WebDriver] = None
+    ) -> Iterable[Tuple[str, int, int, int, Any, Callable]]:
         """
         Collects all the elements and returns a generator of element-handler pair.
         """

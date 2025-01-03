@@ -23,7 +23,7 @@ class BeautifulSoupScraper(ScraperAbstract, HTTPXMixin):
         self,
         urls: Sequence[str],
         pages: int = 1,
-        proxy: ProxiesTypes = None,
+        proxy: Optional[ProxiesTypes] = None,
         output: Optional[str] = None,
         format: str = "json",
         follow_urls: bool = False,
@@ -65,7 +65,11 @@ class BeautifulSoupScraper(ScraperAbstract, HTTPXMixin):
         save_per_page: bool,
         **kwargs: Any,
     ) -> None:
-        with httpx.Client(proxies=proxy, event_hooks={"request": [self._block_httpx_request_if_needed]}) as client:
+        with httpx.Client(
+            proxies=proxy,
+            event_hooks={"request": [self._block_httpx_request_if_needed]},
+            follow_redirects=True,
+        ) as client:
             for request in self.iter_requests():
                 logger.info("Requesting url %s - %s", request.method, request.url)
                 for i in range(1, pages + 1):
@@ -127,7 +131,7 @@ class BeautifulSoupScraper(ScraperAbstract, HTTPXMixin):
                     if i == pages or not await self.navigate_async():
                         break
 
-    def setup(self, soup: BeautifulSoup = None) -> None:
+    def setup(self, soup: Optional[BeautifulSoup] = None) -> None:
         """
         This will only call the pre-setup and post-setup events if extra actions are needed to the soup object.
         :param soup: BeautifulSoup object
@@ -136,7 +140,7 @@ class BeautifulSoupScraper(ScraperAbstract, HTTPXMixin):
         self.event_pre_setup(soup)
         self.event_post_setup(soup)
 
-    async def setup_async(self, soup: BeautifulSoup = None) -> None:
+    async def setup_async(self, soup: Optional[BeautifulSoup] = None) -> None:
         """
         This will only call the pre-setup and post-setup events if extra actions are needed to the soup object.
         :param soup: BeautifulSoup object
@@ -152,7 +156,7 @@ class BeautifulSoupScraper(ScraperAbstract, HTTPXMixin):
         return False
 
     def collect_elements(
-        self, soup: BeautifulSoup = None, url: str = None
+        self, soup: Optional[BeautifulSoup] = None, url: Optional[str] = None
     ) -> Iterable[Tuple[str, int, int, int, Any, Callable]]:
         assert soup is not None
         assert url is not None

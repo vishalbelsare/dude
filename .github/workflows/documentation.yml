@@ -17,13 +17,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
+
       - run: |
           pip3 install -U pip setuptools poetry
           poetry config virtualenvs.create false
-          poetry config experimental.new-installer false
-          poetry install -E bs4 -E parsel -E lxml -E pyppeteer -E selenium
+          poetry install -E bs4 -E parsel -E lxml -E selenium
       - run: poetry run mkdocs gh-deploy --force

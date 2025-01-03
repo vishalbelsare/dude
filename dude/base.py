@@ -1,10 +1,12 @@
 import asyncio
 import collections
+import inspect
 import itertools
 import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
+from types import GeneratorType
 from typing import (
     Any,
     AsyncIterable,
@@ -43,12 +45,13 @@ class ScraperBase(ABC):
     """
 
     supports_sync = True
+    current_url = ""
 
     def __init__(
         self,
-        rules: List[Rule] = None,
-        groups: Dict[Callable, Selector] = None,
-        save_rules: Dict[Tuple[str, bool], Any] = None,
+        rules: Optional[List[Rule]] = None,
+        groups: Optional[Dict[Callable, Selector]] = None,
+        save_rules: Optional[Dict[Tuple[str, bool], Any]] = None,
         events: Optional[DefaultDict] = None,
         has_async: bool = False,
         requests: Optional[Deque] = None,  # only valid for BeautifulSoup4, lxml and Parsel backends
@@ -139,20 +142,20 @@ class ScraperBase(ABC):
 
     def select(
         self,
-        selector: str = None,
-        group: str = None,
+        selector: Optional[str] = None,
+        group: Optional[str] = None,
         setup: bool = False,
         navigate: bool = False,
         url_match: Union[str, Callable] = "*",
         priority: int = 100,
-        css: str = None,
-        xpath: str = None,
-        text: str = None,
-        regex: str = None,
-        group_css: str = None,
-        group_xpath: str = None,
-        group_text: str = None,
-        group_regex: str = None,
+        css: Optional[str] = None,
+        xpath: Optional[str] = None,
+        text: Optional[str] = None,
+        regex: Optional[str] = None,
+        group_css: Optional[str] = None,
+        group_xpath: Optional[str] = None,
+        group_text: Optional[str] = None,
+        group_regex: Optional[str] = None,
     ) -> Callable:
         """
         Decorator to register a handler function to a given selector.
@@ -177,7 +180,7 @@ class ScraperBase(ABC):
             sel = Selector(selector=selector, css=css, xpath=xpath, text=text, regex=regex)
             assert sel, "Any of selector, css, xpath, text and regex params should be present."
 
-            if asyncio.iscoroutinefunction(func):
+            if asyncio.iscoroutinefunction(func) or inspect.isasyncgenfunction(func):
                 self.has_async = True
 
             rule = Rule(
@@ -197,11 +200,11 @@ class ScraperBase(ABC):
 
     def group(
         self,
-        selector: str = None,
-        css: str = None,
-        xpath: str = None,
-        text: str = None,
-        regex: str = None,
+        selector: Optional[str] = None,
+        css: Optional[str] = None,
+        xpath: Optional[str] = None,
+        text: Optional[str] = None,
+        regex: Optional[str] = None,
     ) -> Callable:
         """
         Decorator to register a handler function to a given group.
@@ -349,6 +352,12 @@ class ScraperBase(ABC):
 
         return wrapper
 
+    def get_current_url(self) -> str:
+        return self.scraper.current_url if self.scraper else self.current_url
+
+    def follow_url(self, url: str) -> None:
+        self.scraper.urls.append(url) if self.scraper else self.urls.append(url)
+
     def iter_urls(self) -> Iterator[str]:
         try:
             while True:
@@ -361,6 +370,7 @@ class ScraperBase(ABC):
                     logger.info("Not allowed to crawl %s", url)
                     continue
                 time.sleep(crawl_delay)
+                self.current_url = url
                 yield url
         except IndexError:
             pass
@@ -423,9 +433,9 @@ class ScraperBase(ABC):
 class ScraperAbstract(ScraperBase):
     def __init__(
         self,
-        rules: List[Rule] = None,
-        groups: Dict[Callable, Selector] = None,
-        save_rules: Dict[Tuple[str, bool], Any] = None,
+        rules: Optional[List[Rule]] = None,
+        groups: Optional[Dict[Callable, Selector]] = None,
+        save_rules: Optional[Dict[Tuple[str, bool], Any]] = None,
         events: Optional[DefaultDict] = None,
         has_async: bool = False,
         requests: Optional[Deque] = None,
@@ -528,10 +538,22 @@ class ScraperAbstract(ScraperBase):
         for page_url, group_index, group_id, element_index, element, handler in collected_elements:
             data = handler(element)
 
+            if isinstance(data, GeneratorType):
+                for index, d in enumerate(data):
+                    yield ScrapedData(
+                        page_number=page_number,
+                        page_url=page_url,
+                        group_id=group_id,
+                        group_index=group_index,
+                        element_index=index,
+                        data=d,
+                    )
+                continue
+
             if not data:
                 continue
 
-            scraped_data = ScrapedData(
+            yield ScrapedData(
                 page_number=page_number,
                 page_url=page_url,
                 group_id=group_id,
@@ -539,7 +561,6 @@ class ScraperAbstract(ScraperBase):
                 element_index=element_index,
                 data=data,
             )
-            yield scraped_data
 
     async def extract_all_async(self, page_number: int, **kwargs: Any) -> AsyncIterable[ScrapedData]:
         """
@@ -549,12 +570,26 @@ class ScraperAbstract(ScraperBase):
         collected_elements = [element async for element in self.collect_elements_async(**kwargs)]
 
         for page_url, group_index, group_id, element_index, element, handler in collected_elements:
+            if inspect.isasyncgenfunction(handler):
+                index = 0
+                async for data in handler(element):
+                    yield ScrapedData(
+                        page_number=page_number,
+                        page_url=page_url,
+                        group_id=group_id,
+                        group_index=group_index,
+                        element_index=index,
+                        data=data,
+                    )
+                    index += 1
+                continue
+
             data = await handler(element)
 
             if not data:
                 continue
 
-            scraped_data = ScrapedData(
+            yield ScrapedData(
                 page_number=page_number,
                 page_url=page_url,
                 group_id=group_id,
@@ -562,7 +597,6 @@ class ScraperAbstract(ScraperBase):
                 element_index=element_index,
                 data=data,
             )
-            yield scraped_data
 
     def get_scraping_rules(self, url: str) -> Iterable[Rule]:
         return filter(rule_filter(url), self.rules)

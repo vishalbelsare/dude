@@ -28,7 +28,7 @@ class IsUrl:
 
     def __eq__(self, other: Any) -> bool:
         """
-        When loading an HTML file from local, Pyppeteer and Selenium prepends "file://" to href.
+        When loading an HTML file from local, Selenium prepends "file://" to href.
         On Windows, "file:///<Drive>:" is prepended, e.g. "file:///D:".
         """
         return isinstance(other, str) and (other == self.url or other == urljoin(self.full_html_path, self.url))
@@ -129,6 +129,40 @@ def expected_data(base_url: str) -> List[Dict]:
             "_group_id": is_integer,
             "_group_index": 2,
             "_element_index": 0,
+            "url": "url-3.html",
+            "title": "Title 3",
+        },
+    ]
+
+
+@pytest.fixture()
+def expected_generator_data(base_url: str) -> List[Dict]:
+    is_integer = IsInteger()
+    return [
+        {
+            "_page_number": 1,
+            "_page_url": base_url,
+            "_group_id": is_integer,
+            "_group_index": 0,
+            "_element_index": 0,
+            "url": "url-1.html",
+            "title": "Title 1",
+        },
+        {
+            "_page_number": 1,
+            "_page_url": base_url,
+            "_group_id": is_integer,
+            "_group_index": 0,
+            "_element_index": 1,
+            "url": "url-2.html",
+            "title": "Title 2",
+        },
+        {
+            "_page_number": 1,
+            "_page_url": base_url,
+            "_group_id": is_integer,
+            "_group_index": 0,
+            "_element_index": 2,
             "url": "url-3.html",
             "title": "Title 3",
         },

@@ -3,7 +3,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .context import group, post_setup, pre_setup, run, save, select, shutdown, start_requests, startup  # noqa: F401
+from .context import (  # noqa: F401
+    follow_url,
+    get_current_url,
+    group,
+    post_setup,
+    pre_setup,
+    run,
+    save,
+    select,
+    shutdown,
+    start_requests,
+    startup,
+)
 from .scraper import Scraper  # noqa: F401
 
 EXTRA_EXPORTS = []
@@ -25,6 +37,8 @@ __all__ = [
     "pre_setup",
     "post_setup",
     "start_requests",
+    "get_current_url",
+    "follow_url",
 ] + EXTRA_EXPORTS
 
 
@@ -89,13 +103,6 @@ def cli() -> None:  # pragma: no cover
         default=False,
         action="store_true",
         help="Use lxml.",
-    )
-    parser_group.add_argument(
-        "--pyppeteer",
-        dest="pyppeteer",
-        default=False,
-        action="store_true",
-        help="Use Pyppeteer.",
     )
     parser_group.add_argument(
         "--selenium",
@@ -209,14 +216,12 @@ def cli() -> None:  # pragma: no cover
         parser_type = "parsel"
     elif arguments.lxml:
         parser_type = "lxml"
-    elif arguments.pyppeteer:
-        parser_type = "pyppeteer"
     elif arguments.selenium:
         parser_type = "selenium"
 
     proxy: Any = None
     if arguments.proxy_server:
-        if parser_type in ("playwright", "pyppeteer"):
+        if parser_type == "playwright":
             proxy = {
                 "server": arguments.proxy_server,
                 "username": arguments.proxy_user or "",

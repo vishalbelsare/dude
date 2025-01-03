@@ -68,7 +68,7 @@ class PlaywrightScraper(ScraperAbstract):
         """
         yield from page_or_element.query_selector_all(selector)
 
-    def setup(self, page: sync_api.Page = None) -> None:
+    def setup(self, page: Optional[sync_api.Page] = None) -> None:
         """
         Executes setup handlers
 
@@ -84,7 +84,7 @@ class PlaywrightScraper(ScraperAbstract):
 
         self.event_post_setup(page)
 
-    async def setup_async(self, page: async_api.Page = None) -> None:
+    async def setup_async(self, page: Optional[async_api.Page] = None) -> None:
         """
         Executes setup handlers
 
@@ -100,7 +100,7 @@ class PlaywrightScraper(ScraperAbstract):
 
         await self.event_post_setup_async(page)
 
-    def navigate(self, page: sync_api.Page = None) -> bool:
+    def navigate(self, page: Optional[sync_api.Page] = None) -> bool:
         """
         Executes navigate handlers
 
@@ -114,7 +114,7 @@ class PlaywrightScraper(ScraperAbstract):
                 return True
         return False
 
-    async def navigate_async(self, page: async_api.Page = None) -> bool:
+    async def navigate_async(self, page: Optional[async_api.Page] = None) -> bool:
         """
         Executes navigate handlers
 
@@ -168,14 +168,15 @@ class PlaywrightScraper(ScraperAbstract):
         # FIXME: Coverage fails to cover anything within this context manager block
         with sync_playwright() as p:
             browser = p[browser_type].launch(headless=headless, proxy=proxy, **launch_kwargs)
-            page = browser.new_page()
-            page.route("**/*", self._block_url_if_needed)
             for url in self.iter_urls():
+                page = browser.new_page()
+                page.route("**/*", self._block_url_if_needed)
                 logger.info("Requesting url %s", url)
                 try:
                     page.goto(url)
                 except sync_api.Error as e:
                     logger.warning(e)
+                    page.close()
                     continue
                 logger.info("Loaded page %s", page.url)
                 if follow_urls:
@@ -194,7 +195,10 @@ class PlaywrightScraper(ScraperAbstract):
                         self._save(format, output, save_per_page)
 
                     if i == pages or not self.navigate(page=page) or current_page == page.url:
+                        page.close()
                         break
+
+                page.close()
 
             browser.close()
 
@@ -213,14 +217,15 @@ class PlaywrightScraper(ScraperAbstract):
         launch_kwargs = self._get_launch_kwargs(browser_type)
         async with async_playwright() as p:
             browser = await p[browser_type].launch(headless=headless, proxy=proxy, **launch_kwargs)
-            page = await browser.new_page()
-            await page.route("**/*", self._block_url_if_needed)
             for url in self.iter_urls():
+                page = await browser.new_page()
+                await page.route("**/*", self._block_url_if_needed)
                 logger.info("Requesting url %s", url)
                 try:
                     await page.goto(url)
                 except async_api.Error as e:
                     logger.warning(e)
+                    await page.close()
                     continue
                 logger.info("Loaded page %s", page.url)
                 if follow_urls:
@@ -241,10 +246,16 @@ class PlaywrightScraper(ScraperAbstract):
                         await self._save_async(format, output, save_per_page)
 
                     if i == pages or not await self.navigate_async(page=page) or current_page == page.url:
+                        await page.close()
                         break
+
+                await page.close()
+
             await browser.close()
 
-    def collect_elements(self, page: sync_api.Page = None) -> Iterable[Tuple[str, int, int, int, Any, Callable]]:
+    def collect_elements(
+        self, page: Optional[sync_api.Page] = None
+    ) -> Iterable[Tuple[str, int, int, int, Any, Callable]]:
         """
         Collects all the elements and returns a generator of element-handler pair.
         """
@@ -263,7 +274,7 @@ class PlaywrightScraper(ScraperAbstract):
                         yield page_url, group_index, id(group), element_index, element, rule.handler
 
     async def collect_elements_async(
-        self, page: async_api.Page = None
+        self, page: Optional[async_api.Page] = None
     ) -> AsyncIterable[Tuple[str, int, int, int, Any, Callable]]:
         """
         Collects all the elements and returns a generator of element-handler pair.
